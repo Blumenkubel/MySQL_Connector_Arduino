@@ -38,15 +38,24 @@
 
 #include <MySQL_Packet.h>
 
-class MySQL_Connection : public MySQL_Packet {
-  public:
-    MySQL_Connection(Client *client_instance) :
-        MySQL_Packet(client_instance) {}
-    boolean connect(IPAddress server, int port, char *user, char *password,
-                    char *db=NULL);
-    int connected() { return client->connected(); }
-    const char *version() { return MYSQL_VERSION_STR; }
-    void close();
+class MySQL_Connection : public MySQL_Packet
+{
+
+  // Assumes that the Client is connected
+  boolean connect_to_database(char *user, char *password, char *db);
+
+  template <class T>
+  boolean connect_client(T server, int port);
+
+public:
+  MySQL_Connection(Client *client_instance) : MySQL_Packet(client_instance) {}
+  boolean connect(IPAddress server, int port, char *user, char *password,
+                  char *db = NULL);
+  boolean connect(const char *server_url, int port, char *user, char *password,
+                  char *db = NULL);
+  int connected() { return client->connected(); }
+  const char *version() { return MYSQL_VERSION_STR; }
+  void close();
 };
 
 #endif

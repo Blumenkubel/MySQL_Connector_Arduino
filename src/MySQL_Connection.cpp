@@ -35,11 +35,75 @@
 #include <MySQL_Encrypt_Sha1.h>
 
 #define MAX_CONNECT_ATTEMPTS 3
-#define CONNECT_DELAY_MS     500
-#define SUCCESS              1
+#define CONNECT_DELAY_MS 500
+#define SUCCESS 1
 
 const char CONNECTED[] PROGMEM = "Connected to server version ";
 const char DISCONNECTED[] PROGMEM = "Disconnected.";
+
+boolean MySQL_Connection::connect_to_database(char *user, char *password, char *db)
+{
+  read_packet();
+  parse_handshake_packet();
+  send_authentication_packet(user, password, db);
+  read_packet();
+  if (get_packet_type() != MYSQL_OK_PACKET)
+  {
+    parse_error_packet();
+    return false;
+  }
+
+  show_error(CONNECTED);
+
+  Serial.println(server_version);
+
+  free(server_version); // don't need it anymore
+  return true;
+}
+
+template <class T>
+boolean MySQL_Connection::connect_client(T server, int port)
+{
+  int connected = 0;
+  int retries = MAX_CONNECT_ATTEMPTS;
+
+  // Retry up to MAX_CONNECT_ATTEMPTS times.
+  while (retries--)
+  {
+    Serial.println("...trying...");
+    connected = client->connect(server, port);
+    if (connected != SUCCESS)
+    {
+      Serial.print("...got: ");
+      Serial.print(connected);
+      Serial.println(" retrying...");
+      delay(CONNECT_DELAY_MS);
+    }
+    else
+    {
+      break;
+    }
+  }
+
+  if (connected != SUCCESS)
+  {
+    return false;
+  }
+  return true;
+}
+
+template boolean MySQL_Connection::connect_client<IPAddress>(IPAddress, int);
+template boolean MySQL_Connection::connect_client<const char *>(const char *, int);
+
+boolean MySQL_Connection::connect(const char *server_url, int port, char *user,
+                                  char *password, char *db)
+{
+  if (connect_client(server_url, port) == false)
+  {
+    return false;
+  }
+  return connect_to_database(user, password, db);
+}
 
 /*
   connect - Connect to a MySQL server.
@@ -61,42 +125,12 @@ const char DISCONNECTED[] PROGMEM = "Disconnected.";
 boolean MySQL_Connection::connect(IPAddress server, int port, char *user,
                                   char *password, char *db)
 {
-  int connected = 0;
-  int retries = MAX_CONNECT_ATTEMPTS;
-
-  // Retry up to MAX_CONNECT_ATTEMPTS times.
-  while (retries--)
+  if (connect_client(server, port) == false)
   {
-    Serial.println("...trying...");
-    connected = client->connect(server, port);
-    if (connected != SUCCESS) {
-      Serial.print("...got: ");
-      Serial.print(connected);
-      Serial.println(" retrying...");
-      delay(CONNECT_DELAY_MS);
-    } else {
-      break;
-    }
-  }
-
-  if (connected != SUCCESS)
-    return false;
-
-  read_packet();
-  parse_handshake_packet();
-  send_authentication_packet(user, password, db);
-  read_packet();
-  if (get_packet_type() != MYSQL_OK_PACKET) {
-    parse_error_packet();
     return false;
   }
 
-  show_error(CONNECTED);
-
-  Serial.println(server_version);
-
-  free(server_version); // don't need it anymore
-  return true;
+  return connect_to_database(user, password, db);
 }
 
 /*
